@@ -19,6 +19,11 @@ with st.sidebar:
 
     st.subheader("데이터 수집")
     crawl_pages = st.slider("크롤링 페이지 수", 10, 500, 200)
+    from shared import gitsync
+    auto_push = st.checkbox("크롤링 후 GitHub 자동 푸시 (클라우드 갱신)",
+                            value=gitsync.is_git_repo(),
+                            disabled=not gitsync.is_git_repo(),
+                            help="로컬에서만 동작. 크롤링한 데이터를 GitHub에 올려 클라우드 앱을 갱신합니다.")
     if st.button("📡 네이버 크롤링 시작", use_container_width=True):
         with st.spinner(f"{crawl_pages}페이지 크롤링 중..."):
             from signal_lib.crawlers.naver import crawl_naver
@@ -28,6 +33,14 @@ with st.sidebar:
             count = crawl_naver(max_pages=crawl_pages, progress_callback=naver_progress)
             progress.empty()
         st.success(f"{count}건 신규 수집!")
+
+        if auto_push:
+            with st.spinner("GitHub에 데이터 푸시 중..."):
+                ok, msg = gitsync.push_data(f"데이터 갱신: 리포트 {count}건 신규 수집")
+            if ok:
+                st.success(f"☁️ {msg}")
+            else:
+                st.info(f"ℹ️ {msg}")
         st.rerun()
 
     st.divider()
