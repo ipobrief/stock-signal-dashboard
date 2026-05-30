@@ -157,8 +157,8 @@ with tab_trade:
 
 # ============ 정책자금 ============
 with tab_policy:
-    st.subheader("업종별 정책자금 지원 현황")
-    st.caption("⚠️ 연 1회 갱신 데이터 — 중소벤처기업진흥공단 (정부가 어느 업종에 정책자금을 투입했는지)")
+    st.subheader("정책자금 지원 현황")
+    st.caption("⚠️ 연 1회 갱신 — 중소벤처기업진흥공단 (정부 정책자금이 어디에 배정됐는지: 자금종류/업종별)")
 
     if is_local:
         with st.expander("📤 정책자금 CSV 업로드 (연 1회)"):
@@ -189,7 +189,7 @@ with tab_policy:
                 marker_color="rgba(168,85,247,0.7)",
                 text=[f"{v:,.0f}" for v in d[sort_col]], textposition="outside",
             ))
-            fig.update_layout(title="업종별 정책자금 " + ("지원금액" if has_amt else "지원건수") + " (상위 25)",
+            fig.update_layout(title="정책자금 " + ("지원금액" if has_amt else "지원건수") + " (상위 25)",
                               height=max(400, len(d)*26), yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig, use_container_width=True)
 
