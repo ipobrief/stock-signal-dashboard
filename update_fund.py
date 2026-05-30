@@ -10,7 +10,7 @@ except Exception:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fund_lib.apikey import get_dart_key
-from fund_lib import dart_client
+from fund_lib import dart_client, loan_client, trade_client
 from shared import gitsync
 
 REPORT_DB = os.path.join(os.path.dirname(__file__), "data", "reports.db")
@@ -43,11 +43,47 @@ def main():
     df = dart_client.collect_holdings(key, stocks, progress_callback=progress)
     dart_client.save_holdings(df)
     print()
-    print(f"  {len(df)}건 수집 완료 ({df['stock_name'].nunique()}개 종목)")
-    print("-" * 50)
+    print(f"  기관 지분 {len(df)}건 ({df['stock_name'].nunique()}개 종목)")
 
+    push_files = ["data/dart_holdings.json"]
+
+    # 산업별 대출 (한국은행 ECOS)
+    ecos = loan_client.get_ecos_key()
+    if ecos:
+        print("-" * 50)
+        print("  산업별 대출(한국은행) 수집 중...")
+        rq, pq = loan_client.latest_quarters(1)
+        ld = loan_client.collect_loans(ecos, rq, pq)
+        if ld.empty:  # 최근 분기 미확정 시 한 분기 더 과거
+            rq, pq = loan_client.latest_quarters(2)
+            ld = loan_client.collect_loans(ecos, rq, pq)
+        if not ld.empty:
+            loan_client.save_loans(ld)
+            push_files.append("data/industry_loan.json")
+            print(f"  대출 {len(ld)}개 산업 ({pq}->{rq})")
+
+    # 수출입 (관세청)
+    dgk = trade_client.get_datagokr_key()
+    if dgk:
+        print("-" * 50)
+        print("  수출입(관세청) 수집 중...")
+        import datetime
+        today = datetime.date.today()
+        recent = (today.replace(day=1) - datetime.timedelta(days=1))      # 전월
+        prev = (recent.replace(day=1) - datetime.timedelta(days=1))       # 전전월
+        td = trade_client.collect_trade(dgk, recent.strftime("%Y%m"), prev.strftime("%Y%m"),
+                                        progress_callback=lambda i, t: print(f"\r    {i}/{t}", end="", flush=True))
+        print()
+        if not td.empty:
+            trade_client.save_trade(td)
+            push_files.append("data/customs_trade.json")
+            print(f"  수출입 {len(td)}개 품목")
+        else:
+            print("  (관세청 API 미승인 — 건너뜀)")
+
+    print("-" * 50)
     print("  GitHub에 푸시 중...")
-    ok, msg = gitsync.push_data_files(["data/dart_holdings.json"], f"데이터 갱신: 기관 지분 {len(df)}건")
+    ok, msg = gitsync.push_data_files(push_files, "데이터 갱신: 산업 자금흐름")
     print(("  ✅ " if ok else "  ℹ️ ") + msg)
 
     print("=" * 50)

@@ -4,3 +4,5 @@ __pycache__/
 .streamlit/secrets.toml
 data/dart_key.txt
 data/dart_corp_map.json
+data/datagokr_key.txt
+data/ecos_key.txt
