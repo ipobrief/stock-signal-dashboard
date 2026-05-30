@@ -9,6 +9,22 @@ def is_git_repo() -> bool:
     return os.path.isdir(os.path.join(ROOT, ".git"))
 
 
+def is_cloud() -> bool:
+    """Streamlit Community Cloud 환경 여부.
+    클라우드는 저장소를 /mount/src 경로에 마운트하고 Linux에서 실행됨."""
+    path = os.path.abspath(__file__).replace("\\", "/")
+    if path.startswith("/mount/"):
+        return True
+    if os.path.isdir("/mount/src"):
+        return True
+    return False
+
+
+def is_local() -> bool:
+    """로컬 PC에서 실행 중이고 git 푸시가 가능한 환경."""
+    return is_git_repo() and not is_cloud()
+
+
 def push_data(message: str = "데이터 갱신: reports.db") -> tuple:
     """data/reports.db를 커밋·푸시. (성공여부, 메시지) 반환.
     git 저장소가 아니거나(클라우드 등) 실패 시 조용히 False 반환."""

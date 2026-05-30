@@ -11,6 +11,24 @@ from shared import watchlist as wl
 st.set_page_config(page_title="애널리스트 시그널", page_icon="🎯", layout="wide")
 init_db()
 
+
+@st.dialog("💻 데이터 갱신은 내 PC에서 해주세요")
+def show_local_only_dialog():
+    st.markdown("""
+**클라우드(웹)에서는 크롤링한 데이터가 저장되지 않습니다.**
+(앱이 재시작되면 사라지고, 공개 앱에도 반영되지 않습니다)
+
+데이터를 영구적으로 갱신하려면 **내 컴퓨터**에서:
+
+1. `stock-dashboard` 폴더의 **`대쉬보드_실행.bat`** 더블클릭
+2. 열린 화면에서 **📡 네이버 크롤링 시작** 클릭
+
+→ 로컬 갱신 + GitHub 자동 푸시 + 공개 앱 반영까지 한 번에 완료됩니다.
+""")
+    if st.button("확인", use_container_width=True):
+        st.rerun()
+
+
 st.title("🎯 애널리스트 시그널")
 
 # --- Sidebar ---
@@ -18,30 +36,40 @@ with st.sidebar:
     st.header("설정")
 
     st.subheader("데이터 수집")
-    crawl_pages = st.slider("크롤링 페이지 수", 10, 500, 200)
     from shared import gitsync
-    auto_push = st.checkbox("크롤링 후 GitHub 자동 푸시 (클라우드 갱신)",
-                            value=gitsync.is_git_repo(),
-                            disabled=not gitsync.is_git_repo(),
-                            help="로컬에서만 동작. 크롤링한 데이터를 GitHub에 올려 클라우드 앱을 갱신합니다.")
-    if st.button("📡 네이버 크롤링 시작", use_container_width=True):
-        with st.spinner(f"{crawl_pages}페이지 크롤링 중..."):
-            from signal_lib.crawlers.naver import crawl_naver
-            progress = st.progress(0)
-            def naver_progress(page, total):
-                progress.progress(page / total)
-            count = crawl_naver(max_pages=crawl_pages, progress_callback=naver_progress)
-            progress.empty()
-        st.success(f"{count}건 신규 수집!")
+    is_local = gitsync.is_local()
 
-        if auto_push:
-            with st.spinner("GitHub에 데이터 푸시 중..."):
-                ok, msg = gitsync.push_data(f"데이터 갱신: 리포트 {count}건 신규 수집")
-            if ok:
-                st.success(f"☁️ {msg}")
-            else:
-                st.info(f"ℹ️ {msg}")
-        st.rerun()
+    crawl_pages = st.slider("크롤링 페이지 수", 10, 500, 200)
+
+    # 자동 푸시 체크박스는 로컬에서만 표시
+    auto_push = False
+    if is_local:
+        auto_push = st.checkbox("크롤링 후 GitHub 자동 푸시 (클라우드 갱신)",
+                                value=True,
+                                help="크롤링한 데이터를 GitHub에 올려 공개 앱을 갱신합니다.")
+
+    if st.button("📡 네이버 크롤링 시작", use_container_width=True):
+        if not is_local:
+            # 클라우드에서는 크롤링 대신 안내 팝업
+            show_local_only_dialog()
+        else:
+            with st.spinner(f"{crawl_pages}페이지 크롤링 중..."):
+                from signal_lib.crawlers.naver import crawl_naver
+                progress = st.progress(0)
+                def naver_progress(page, total):
+                    progress.progress(page / total)
+                count = crawl_naver(max_pages=crawl_pages, progress_callback=naver_progress)
+                progress.empty()
+            st.success(f"{count}건 신규 수집!")
+
+            if auto_push:
+                with st.spinner("GitHub에 데이터 푸시 중..."):
+                    ok, msg = gitsync.push_data(f"데이터 갱신: 리포트 {count}건 신규 수집")
+                if ok:
+                    st.success(f"☁️ {msg}")
+                else:
+                    st.info(f"ℹ️ {msg}")
+            st.rerun()
 
     st.divider()
     report_count = get_report_count()
