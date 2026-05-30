@@ -7,8 +7,8 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 TRADE_PATH = os.path.join(DATA_DIR, "customs_trade.json")
 KEY_PATH = os.path.join(DATA_DIR, "datagokr_key.txt")
 
-# 관세청 품목별 국가별 수출입실적 (data.go.kr 15100475)
-ENDPOINT = "http://apis.data.go.kr/1220000/nitemtrade/getNitemtradeList"
+# 관세청 품목별 수출입실적 (data.go.kr 15101609)
+ENDPOINT = "http://apis.data.go.kr/1220000/Itemtrade/getItemtradeList"
 
 # HS 2단위 코드 → 산업 분류 (주요 산업만)
 HS2_TO_INDUSTRY = {
@@ -44,25 +44,22 @@ def _num(x):
 
 
 def fetch_trade(api_key: str, start_yymm: str, end_yymm: str, hs2: str) -> dict:
-    """특정 HS 2단위 품목의 기간 수출입 합계. 전체 국가 합계('총계') 행 사용."""
+    """특정 HS 2단위 품목군의 기간 수출입 합계(달러). 하위 품목 전체 합산."""
     try:
         resp = requests.get(ENDPOINT, params={
             "serviceKey": api_key, "strtYymm": start_yymm,
             "endYymm": end_yymm, "hsSgn": hs2,
-        }, timeout=20)
+        }, timeout=25)
         if resp.status_code != 200:
             return {}
-        # XML 응답 파싱
         import xml.etree.ElementTree as ET
         root = ET.fromstring(resp.text)
-        # 총계 행 찾기 (statKor == '총계')
         exp = imp = 0.0
         for item in root.iter("item"):
-            stat = (item.findtext("statKor") or "").strip()
-            if stat == "총계":
-                exp = _num(item.findtext("expDlr"))
-                imp = _num(item.findtext("impDlr"))
-                break
+            exp += _num(item.findtext("expDlr")) or 0
+            imp += _num(item.findtext("impDlr")) or 0
+        if exp == 0 and imp == 0:
+            return {}
         return {"export": exp, "import": imp}
     except Exception:
         return {}
