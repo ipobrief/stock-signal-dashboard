@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from fund_lib import dart_client, loan_client, trade_client
+from fund_lib import dart_client, loan_client, trade_client, policy_client
 from fund_lib.apikey import get_dart_key
 from shared import gitsync
 
@@ -43,9 +43,10 @@ with st.sidebar:
 holdings = dart_client.load_holdings()
 loans = loan_client.load_loans()
 trade = trade_client.load_trade()
+policy_df, policy_note = policy_client.load_policy()
 
-tab_inst, tab_loan, tab_trade = st.tabs([
-    "🏢 기관 지분 (5%룰)", "🏦 산업별 대출 (한국은행)", "🚢 수출입 (관세청)",
+tab_inst, tab_loan, tab_trade, tab_policy = st.tabs([
+    "🏢 기관 지분 (5%룰)", "🏦 산업별 대출 (한국은행)", "🚢 수출입 (관세청)", "🏛️ 정책자금 (연1회)",
 ])
 
 # ============ 기관 지분 ============
@@ -153,3 +154,47 @@ with tab_trade:
             column_config={"수출액($)": st.column_config.NumberColumn(format="%,.0f"),
                            "증감률(%)": st.column_config.NumberColumn(format="%+.1f")},
         )
+
+# ============ 정책자금 ============
+with tab_policy:
+    st.subheader("업종별 정책자금 지원 현황")
+    st.caption("⚠️ 연 1회 갱신 데이터 — 중소벤처기업진흥공단 (정부가 어느 업종에 정책자금을 투입했는지)")
+
+    if is_local:
+        with st.expander("📤 정책자금 CSV 업로드 (연 1회)"):
+            st.markdown("[data.go.kr 15069962](https://www.data.go.kr/data/15069962/fileData.do)에서 CSV 다운로드 후 업로드하세요.")
+            up = st.file_uploader("업종별 정책자금 CSV/엑셀", type=["csv", "xlsx", "xls"])
+            note = st.text_input("기준 시점 메모 (예: 2024년)", value="")
+            if up is not None and st.button("저장 및 반영"):
+                try:
+                    pdf = policy_client.parse_policy_csv(up)
+                    policy_client.save_policy(pdf, note or "연 1회 갱신")
+                    ok, msg = gitsync.push_data_files(["data/policy_fund.json"], "데이터 갱신: 정책자금")
+                    st.success(f"{len(pdf)}개 업종 저장 완료. {msg}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"파싱 실패: {e}")
+
+    if policy_df.empty:
+        st.info("정책자금 데이터가 없습니다. (로컬에서 CSV 업로드 시 표시 — 연 1회 갱신)")
+    else:
+        if policy_note:
+            st.caption(f"📅 기준: {policy_note}")
+        has_amt = policy_df["amount"].notna().any()
+        sort_col = "amount" if has_amt else "count"
+        d = policy_df[policy_df[sort_col].notna()].sort_values(sort_col, ascending=False).head(25)
+        if not d.empty:
+            fig = go.Figure(go.Bar(
+                x=d[sort_col], y=d["industry"], orientation="h",
+                marker_color="rgba(168,85,247,0.7)",
+                text=[f"{v:,.0f}" for v in d[sort_col]], textposition="outside",
+            ))
+            fig.update_layout(title="업종별 정책자금 " + ("지원금액" if has_amt else "지원건수") + " (상위 25)",
+                              height=max(400, len(d)*26), yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig, use_container_width=True)
+
+        show = policy_df.rename(columns={"industry": "업종", "amount": "지원금액", "count": "지원건수"})
+        cols = ["업종"] + [c for c in ["지원금액", "지원건수"] if c in show.columns and show[c].notna().any()]
+        st.dataframe(show[cols], use_container_width=True, hide_index=True,
+                     column_config={"지원금액": st.column_config.NumberColumn(format="%,.0f"),
+                                    "지원건수": st.column_config.NumberColumn(format="%,.0f")})
