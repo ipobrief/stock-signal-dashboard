@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 .DS_Store
 .streamlit/secrets.toml
+data/dart_key.txt
+data/dart_corp_map.json

@@ -25,8 +25,8 @@ def is_local() -> bool:
     return is_git_repo() and not is_cloud()
 
 
-def push_data(message: str = "데이터 갱신: reports.db") -> tuple:
-    """data/reports.db를 커밋·푸시. (성공여부, 메시지) 반환.
+def push_data_files(files: list, message: str = "데이터 갱신") -> tuple:
+    """지정한 파일들을 커밋·푸시. (성공여부, 메시지) 반환.
     git 저장소가 아니거나(클라우드 등) 실패 시 조용히 False 반환."""
     if not is_git_repo():
         return False, "git 저장소가 아님 (클라우드 환경 — 자동 푸시 건너뜀)"
@@ -38,11 +38,10 @@ def push_data(message: str = "데이터 갱신: reports.db") -> tuple:
                 capture_output=True, text=True, timeout=120,
             )
 
-        add = run(["add", "data/reports.db"])
+        add = run(["add"] + files)
         if add.returncode != 0:
             return False, f"git add 실패: {add.stderr.strip()}"
 
-        # 변경 없으면 스킵
         diff = run(["diff", "--cached", "--quiet"])
         if diff.returncode == 0:
             return False, "변경된 데이터 없음 (커밋 생략)"
@@ -60,3 +59,8 @@ def push_data(message: str = "데이터 갱신: reports.db") -> tuple:
         return True, "GitHub에 푸시 완료 → 클라우드 자동 재배포됩니다"
     except Exception as e:
         return False, f"오류: {e}"
+
+
+def push_data(message: str = "데이터 갱신: reports.db") -> tuple:
+    """data/reports.db를 커밋·푸시."""
+    return push_data_files(["data/reports.db"], message)
