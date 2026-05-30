@@ -41,7 +41,8 @@ def get_all_sector_etf_data(start_date: str, end_date: str) -> dict:
 def get_sector_rankings() -> pd.DataFrame:
     try:
         resp = requests.get(NAVER_SECTOR_URL, headers={"User-Agent": USER_AGENT}, timeout=10)
-        soup = BeautifulSoup(resp.content, "lxml", from_encoding="euc-kr")
+        html = resp.content.decode("euc-kr", errors="replace")
+        soup = BeautifulSoup(html, "lxml")
 
         table = soup.find("table", class_="type_1")
         if not table:
