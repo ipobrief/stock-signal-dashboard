@@ -20,10 +20,10 @@ def show_local_only_dialog():
 
 데이터를 영구적으로 갱신하려면 **내 컴퓨터**에서:
 
-1. `stock-dashboard` 폴더의 **`대쉬보드_실행.bat`** 더블클릭
-2. 열린 화면에서 **📡 네이버 크롤링 시작** 클릭
+👉 `stock-dashboard` 폴더의 **`데이터_갱신.bat`** 를 **더블클릭**하세요.
 
-→ 로컬 갱신 + GitHub 자동 푸시 + 공개 앱 반영까지 한 번에 완료됩니다.
+→ 크롤링 + GitHub 푸시가 자동으로 진행되고,
+   1~2분 후 이 공개 앱에도 반영됩니다. (화면 띄울 필요 없음)
 """)
     if st.button("확인", use_container_width=True):
         st.rerun()
