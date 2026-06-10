@@ -81,8 +81,11 @@ def sector_reco(signals: pd.DataFrame, holdings: pd.DataFrame, reports: pd.DataF
 
 
 def stock_reco(signals: pd.DataFrame, leading: pd.DataFrame, holdings: pd.DataFrame,
-               top_sectors: list = None, top_n: int = 5) -> pd.DataFrame:
-    """종목 추천 랭킹: 선행시그널 점수 + 기관 매집 + (옵션) 추천섹터 가중."""
+               top_sectors: list = None, top_n: int = 5, price_fn=None) -> pd.DataFrame:
+    """종목 추천 랭킹: 선행시그널 점수 + 기관 매집 + (옵션) 추천섹터 가중.
+
+    price_fn: 종목코드 → 현재가(int|None). 주어지면 목표가 대비 괴리율(상승여력)을
+    계산해, 현재가가 목표가를 넘어선(괴리율 음수) 종목은 점수를 감점한다."""
     if signals.empty:
         return pd.DataFrame()
 
@@ -119,6 +122,25 @@ def stock_reco(signals: pd.DataFrame, leading: pd.DataFrame, holdings: pd.DataFr
     # 추천 섹터 가중치
     if top_sectors:
         base.loc[base["sector"].isin(top_sectors), "composite"] *= 1.2
+
+    # 괴리율(상승여력) 반영: 상위 후보만 현재가 조회 후 목표가 하회 종목 감점
+    base["cur_price"] = np.nan
+    base["upside_pct"] = np.nan
+    if price_fn is not None:
+        cand = base.sort_values("composite", ascending=False).head(max(top_n * 3, 15))
+        for idx, r in cand.iterrows():
+            if not r["stock_code"] or pd.isna(r["last_3_avg"]):
+                continue
+            cur = price_fn(r["stock_code"])
+            if not cur:
+                continue
+            upside = (float(r["last_3_avg"]) - cur) / cur * 100
+            base.loc[idx, "cur_price"] = cur
+            base.loc[idx, "upside_pct"] = upside
+            if upside < 0:
+                # 이미 목표가를 넘어선 종목: 초과폭에 비례해 감점 (최대 60%)
+                penalty = min(abs(upside) / 20.0, 1.0) * 0.6
+                base.loc[idx, "composite"] *= (1.0 - penalty)
 
     base = base.sort_values("composite", ascending=False).head(top_n).reset_index(drop=True)
 

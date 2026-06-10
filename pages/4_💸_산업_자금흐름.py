@@ -39,10 +39,16 @@ with st.sidebar:
         else:
             st.info("로컬에서는 `자금흐름_갱신.bat` 더블클릭을 권장합니다 (수 분 소요).")
 
-# === 데이터 로드 ===
-holdings = dart_client.load_holdings()
-loans = loan_client.load_loans()
-trade = trade_client.load_trade()
+# === 데이터 로드 (캐시) ===
+@st.cache_data(ttl=600, show_spinner=False)
+def _load_all():
+    h = dart_client.load_holdings()
+    if not h.empty:
+        h["is_inst"] = h["holder"].apply(dart_client.is_institution)
+    return h, loan_client.load_loans(), trade_client.load_trade()
+
+
+holdings, loans, trade = _load_all()
 
 tab_inst, tab_loan, tab_trade = st.tabs([
     "🏢 기관 지분 (5%룰)", "🏦 산업별 대출 (한국은행)", "🚢 수출입 (관세청)",
@@ -53,7 +59,6 @@ with tab_inst:
     if holdings.empty:
         st.info("기관 지분 데이터가 없습니다. 로컬에서 `자금흐름_갱신.bat` 실행 후 표시됩니다.")
     else:
-        holdings["is_inst"] = holdings["holder"].apply(dart_client.is_institution)
         inst = holdings[holdings["is_inst"]].copy()
         st.caption(f"기관/운용사 보유 {len(inst)}건 / {inst['stock_name'].nunique()}개 종목 / {inst['holder'].nunique()}개 기관")
 

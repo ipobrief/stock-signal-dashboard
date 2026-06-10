@@ -35,9 +35,21 @@ signals = compute_signals(df, min_reports=5)
 leading = compute_leading_signals(df, min_reports=3)
 holdings = dart_client.load_holdings()
 
+
+@st.cache_data(ttl=600, show_spinner=False)
+def _last_close(code: str, start: str, end: str):
+    pdf = get_stock_price(code, start, end)
+    if pdf.empty:
+        return None
+    return int(pdf.iloc[-1]["close"])
+
+
+_s, _e = start_date.strftime("%Y-%m-%d"), data_max.strftime("%Y-%m-%d")
+
 sec_reco = engine.sector_reco(signals, holdings, df, top_n=top_n)
 top_sectors = sec_reco["sector"].tolist() if not sec_reco.empty else []
-stk_reco = engine.stock_reco(signals, leading, holdings, top_sectors=top_sectors, top_n=top_n)
+stk_reco = engine.stock_reco(signals, leading, holdings, top_sectors=top_sectors, top_n=top_n,
+                             price_fn=lambda code: _last_close(code, _s, _e))
 
 # ============ 추천 업종 ============
 st.subheader(f"🏭 추천 업종 TOP {top_n}")
@@ -64,8 +76,13 @@ for i, r in stk_reco.iterrows():
         c1, c2, c3 = st.columns([1, 4, 1])
         c1.metric(f"#{i+1}", r["stock_name"], f"{r['composite']:.0f}점")
         badge = "🔥 추천업종" if in_top_sector else ""
+        if pd.notna(r.get("upside_pct")) and r["upside_pct"] < 0:
+            badge += " ⚠️ 목표가 하회(주가가 목표가 초과)"
         c2.markdown(f"**{r['stock_name']}** ({r['sector']}) {badge}  \n{r['reason']}")
-        c2.caption(f"최근 목표가 {int(r['last_3_avg']):,}원 · 목표가 추세 {r['change_pct']:+.1f}%")
+        cap = f"최근 목표가 {int(r['last_3_avg']):,}원 · 목표가 추세 {r['change_pct']:+.1f}%"
+        if pd.notna(r.get("upside_pct")):
+            cap += f" · 괴리율(상승여력) {r['upside_pct']:+.1f}%"
+        c2.caption(cap)
         if not wl.is_in_watchlist(r["stock_name"]):
             if c3.button("⭐ 관심", key=f"wl_{r['stock_name']}", use_container_width=True):
                 wl.add_stock(r["stock_name"], r["stock_code"])
